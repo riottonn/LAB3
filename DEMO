@@ -1,0 +1,47 @@
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <string>
+using namespace std;
+
+class SafeStruct {
+    int fields[2];
+    mutable mutex field_mutex[2];
+    mutable mutex all_mutex;
+public:
+    SafeStruct() { fields[0] = fields[1] = 0; }
+
+    void set(int i, int v) {
+        lock_guard<mutex> lock(field_mutex[i]);
+        fields[i] = v;
+    }
+
+    int get(int i) const {
+        lock_guard<mutex> lock(field_mutex[i]);
+        return fields[i];
+    }
+
+    operator string() const {
+        lock_guard<mutex> lock_all(all_mutex);
+        lock_guard<mutex> l0(field_mutex[0]);
+        lock_guard<mutex> l1(field_mutex[1]);
+        return "{" + to_string(fields[0]) + ", " + to_string(fields[1]) + "}";
+    }
+};
+
+void worker(SafeStruct& s, int id) {
+    for (int i = 0; i < 5; ++i) {
+        s.set(id, i);
+        cout << "Thread " << id << " wrote " << i << endl;
+        cout << "Current: " << string(s) << endl;
+    }
+}
+
+int main() {
+    SafeStruct s;
+    thread t1(worker, ref(s), 0);
+    thread t2(worker, ref(s), 1);
+    t1.join();
+    t2.join();
+    cout << "Final: " << string(s) << endl;
+}
